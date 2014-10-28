@@ -12,6 +12,9 @@
 #define _GNU_SOURCE
 
 #include "core.h"
+
+// in core.cpp
+
 //#include "hash/templates.h"
 //#include "hash/CBlock.h"
 //#include "hash/Miner.h"
@@ -274,6 +277,8 @@
 #endif
 
 #define PROGRAM_NAME		"skminer"
+
+#include "util_llh.h"
 
 // from heavy.cu
 #ifdef __cplusplus
