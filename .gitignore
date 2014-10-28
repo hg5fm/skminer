@@ -6,6 +6,16 @@
 *.user
 *.sln.docstates
 
+# Linux artefacts
+
+*.o
+.deps
+autom4te.cache/
+.dirstamp
+Makefile
+config.status
+stamp-h1
+
 # Build results
 
 [Dd]ebug/
