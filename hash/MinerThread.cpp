@@ -15,6 +15,7 @@ namespace Core
 		m_pTHREAD = boost::thread(&MinerThread::SK1024Miner, this);
 		total_mhashes_done = 0;
 		m_nThroughput = 0;
+		m_bBenchmark = false;
 	}
 
 	MinerThread::MinerThread(const MinerThread& miner)
@@ -50,7 +51,7 @@ namespace Core
 
 	void MinerThread::SK1024Miner()
 	{
-		const int throughput = GetThroughput() == 0 ? 512 * 4 * 512 * 1 : GetThroughput();
+		const int throughput = GetThroughput() == 0 ? 512 * 1 * 512 * 8 : GetThroughput();
 		loop
 		{
 			try
@@ -60,24 +61,31 @@ namespace Core
 					Sleep(1);
 		
 				CBigNum target;
-				target.SetCompact(m_pBLOCK->GetBits());
-				
-				
+				target.SetCompact(m_pBLOCK->GetBits());				
+				if (m_bBenchmark == true)
+				{
+					target.SetCompact(0x7e006fff);
+					//target.SetCompact(0x7e7fffff);
+					//target.SetCompact(0x7e7fffff);
+					//target = target / 0x300;
+				}
+
 				while(!m_bNewBlock)
 				{					
 					
 					uint1024 hash;
 					unsigned long long hashes=0;
 					unsigned int * TheData =(unsigned int*) m_pBLOCK->GetData();
+
 					uint1024 TheTarget = target.getuint1024();
 					uint64_t Nonce; //= m_pBLOCK->GetNonce();
 					bool found = false;
 					m_clLock.lock();
 					{
 						Nonce = m_pBLOCK->GetNonce();
-						
+						m_GpuId = 0;
 						found = scanhash_sk1024(m_GpuId, TheData, TheTarget, Nonce, 0xffffff, &hashes, throughput);
-						if (hashes < 7964984429)
+						if (hashes < 0xffffffffffffffff)
 							SetHashes(GetHashes()+hashes);
 
 					}

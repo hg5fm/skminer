@@ -5,14 +5,9 @@
 #include "../hash/uint1024.h"
 #include "hash/skein.h"
 #include "hash/KeccakHash.h"
-extern "C"
-{
-
-//#include "sph/sph_keccak.h"
-//#include "sph/sph_sha2.h"
 #include "miner.h"
 #include "miner2.h"
-}
+
 
 // aus cpu-miner.c
 extern int device_map[8];
@@ -22,15 +17,15 @@ static uint64_t *d_hash[8];
 
 extern void skein1024_cpu_init(int thr_id, int threads);
 extern void skein1024_setBlock(void *pdata);
-extern void skein1024_cpu_hash(int thr_id, int threads, uint64_t startNounce, uint64_t *d_hash, int order);
+extern void skein1024_cpu_hash(int thr_id, int threads, uint64_t startNounce, uint64_t *d_hash, int order, int threadsperblock = 256);
 //    extern void sk1024_keccak_cpu_hash(int thr_id, int threads, uint32_t startNounce, uint64_t *d_hash, int order)
-extern uint64_t sk1024_keccak_cpu_hash(int thr_id, int threads, uint64_t startNounce, uint64_t *d_nonceVector, uint64_t *d_hash, int order);
+extern uint64_t sk1024_keccak_cpu_hash(int thr_id, int threads, uint64_t startNounce, uint64_t *d_nonceVector, uint64_t *d_hash, int order, int threadsperblock = 32);
 extern void sk1024_keccak_cpu_init(int thr_id, int threads);
 extern void sk1024_set_Target(const void *ptarget);
 
 extern bool opt_benchmark;
 
-extern "C" bool scanhash_sk1024(unsigned int thr_id, uint32_t* TheData, uint1024 TheTarget, uint64_t &TheNonce, uint64_t max_nonce, unsigned long long *hashes_done, int throughput)
+extern bool scanhash_sk1024(unsigned int thr_id, uint32_t* TheData, uint1024 TheTarget, uint64_t &TheNonce, uint64_t max_nonce, unsigned long long *hashes_done, int throughput)
 {
 	uint64_t *ptarget = (uint64_t*)&TheTarget;
 
@@ -63,8 +58,8 @@ extern "C" bool scanhash_sk1024(unsigned int thr_id, uint32_t* TheData, uint1024
 	//	do {
 
 	int order = 0;
-	skein1024_cpu_hash(thr_id, throughput, ((uint64_t*)TheData)[26], d_hash[thr_id], order++);
-	uint64_t foundNonce = sk1024_keccak_cpu_hash(thr_id, throughput, ((uint64_t*)TheData)[26], NULL, d_hash[thr_id], order++);
+	skein1024_cpu_hash(thr_id, throughput, ((uint64_t*)TheData)[26], d_hash[thr_id], order++, 128);
+	uint64_t foundNonce = sk1024_keccak_cpu_hash(thr_id, throughput, ((uint64_t*)TheData)[26], NULL, d_hash[thr_id], order++, 64);
 	if (foundNonce != 0xffffffffffffffff)
 	{
 
@@ -97,6 +92,6 @@ extern "C" bool scanhash_sk1024(unsigned int thr_id, uint32_t* TheData, uint1024
 	//	} while (((uint64_t*)TheData)[26] < max_nonce);
 	uint64_t doneNonce = ((uint64_t*)TheData)[26];
 	if (doneNonce < 18446744072149270489)
-		*hashes_done = ((uint64_t*)TheData)[26] - first_nonce + 1;
+		*hashes_done = doneNonce - first_nonce + 1;
 	return false;
 }

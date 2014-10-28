@@ -11,7 +11,7 @@
 
 
 
-static __device__ unsigned long long MAKE_ULONGLONG(uint32_t LO, uint32_t HI)
+static __device__ uint64_t MAKE_ULONGLONG(uint32_t LO, uint32_t HI)
 {
 uint64_t result;
 asm volatile("{\n\t"

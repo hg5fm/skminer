@@ -7,17 +7,34 @@
 #include "hash/Miner.h"
 #include "hash/MinerThread.h"
 
+unsigned int nBlocksFoundCounter = 0;
+unsigned int nBlocksAccepted = 0;
+unsigned int nBlocksRejected = 0;
+time_t nStartTimer;
+
 char *device_name[8]; // CB
 namespace Core
 {
-
-
-
-	ServerConnection::ServerConnection(std::string ip, std::string port, int nMaxThreads, int nMaxTimeout) 
-		: IP(ip), PORT(port), TIMER(), nThreads(nMaxThreads), nTimeout(nMaxTimeout), THREAD(boost::bind(&ServerConnection::ServerThread, this))
+	ServerConnection::ServerConnection(std::string ip, std::string port, int nMaxThreads, int nMaxTimeout, int throughput, bool benchmark) 
+		: IP(ip), PORT(port), TIMER(), nThreads(nMaxThreads), nTimeout(nMaxTimeout), nThroughput(throughput), bBenchmark(benchmark), THREAD(boost::bind(&ServerConnection::ServerThread, this))
 	{
+		printf("GPU:\n");
+		for (size_t i = 0; i < 8; i++)
+		{
+			if (device_name[i])
+				printf("%i: %s\n", i+1, device_name[i]);
+		}
+		time(&nStartTimer);
+		StartTimer.Start();
+		//nStartTimer = (unsigned int)time(0);
+
 		for (int nIndex = 0; nIndex < nThreads; nIndex++)
-			THREADS.push_back(new MinerThread(nIndex));
+		{
+			MinerThread * minerThread = new MinerThread(nIndex);
+			minerThread->SetThroughput(throughput);
+			minerThread->SetIsBenchmark(benchmark);			
+			THREADS.push_back(minerThread);
+		}
 	}
 
 	/** Reset the block on each of the Threads. **/
@@ -29,7 +46,6 @@ namespace Core
 		{
 			THREADS[nIndex]->SetIsBlockFound(false);
 			THREADS[nIndex]->SetIsNewBlock(true);
-			THREADS[nIndex]->SetHashes(0);
 		}
 
 	}
@@ -54,6 +70,14 @@ namespace Core
 	Mining threads the most performance. **/
 	void ServerConnection::ServerThread()
 	{
+		CBigNum diff1;
+		CBigNum tempTarget;
+		tempTarget.SetCompact(0x7c09cf79);
+		unsigned int tempDiff = 652356296;
+		diff1 = tempTarget * tempDiff;
+
+
+		char buffer[128];
 
 		/** Don't begin until all mining threads are Created. **/
 		while (THREADS.size() != nThreads)
@@ -74,7 +98,7 @@ namespace Core
 			try
 			{
 				/** Run this thread at 1 Cycle per Second. **/
-				Sleep(50);
+				Sleep(10);
 
 
 				/** Attempt with best efforts to keep the Connection Alive. **/
@@ -90,7 +114,7 @@ namespace Core
 
 
 				/** Check the Block Height. **/
-				unsigned int nHeight = CLIENT->GetHeight(5);
+				unsigned int nHeight = CLIENT->GetHeight(nTimeout);
 				if (nHeight == 0)
 				{
 					printf("[MASTER] Failed to Update Height\n");
@@ -110,21 +134,33 @@ namespace Core
 				/** Rudimentary Meter **/
 				if (TIMER.Elapsed() > nTimerWait)
 				{
+					unsigned int elapsedFromStart =  StartTimer.Elapsed();
 					double  Elapsed = (double)TIMER.ElapsedMilliseconds();
 					unsigned long long nHashes = Hashes();
-					//double khash = ((double)nHashes)/Elapsed;
-					unsigned long long khash = nHashes / TIMER.ElapsedMilliseconds();
-					unsigned int nDifficulty = THREADS[0]->GetBlock()->GetBits();
-					nDifficulty = nDifficulty & 0xffffff;
-					CBigNum target;
-					target.SetCompact(nDifficulty);
+					double nMHashps = ((double) nHashes/1000.0) / (double)TIMER.ElapsedMilliseconds();
 
-					//double diff = (double)(0xFFFF * pow(2, 208)) / (double)nDifficulty;
-					printf("[METERS] %llu kHash/s | Height = %u | Diff= %.08f\n", khash, nBestHeight, 1.0 / (double)nDifficulty);
+					unsigned int nBits = THREADS[0]->GetBlock()->GetBits();
+					CBigNum target;
+
+					target.SetCompact(nBits);
+					//CBigNum one;
+					//one.SetCompact(0x7e7fffff);  // the difficulty of block 0
+					CBigNum diff = diff1 / target;
+															
+					struct tm t;
+					__time32_t aclock = elapsedFromStart;
+					
+					_gmtime32_s(&t, &aclock);
+					
+					printf("[METERS] %.04f MHash/s | Block/h %.04f | Blks ACC=%u REJ=%u | Diff=%.08f |  %02d:%02d:%02d:%02d\n", 
+						nMHashps, (double)nBlocksFoundCounter / (double)elapsedFromStart *3600.0, nBlocksAccepted, nBlocksRejected, (double)diff.getulong() / 100000000.0, t.tm_yday, t.tm_hour, t.tm_min, t.tm_sec);
+
+					//printf("[METERS] %.04f MHash/s  |  %.04f Block/h  |  Blks ACC=%u REJ=%u | Diff= %.08f / %lu  \n", 
+					//	nMHashps, (double)nBlocksFoundCounter / (double)elapsedFromStart *3600.0, nBlocksAccepted, nBlocksRejected, 1.0 / (double)nDifficulty, diff.getulong());
 
 					TIMER.Reset();
 					if (nTimerWait == 2)
-						nTimerWait = 20;
+						nTimerWait = 10;
 				}
 
 
@@ -172,26 +208,42 @@ namespace Core
 					else if (THREADS[nIndex]->GetIsBlockFound())
 					{
 
+						double  nHashes = THREADS[nIndex]->GetHashes();
+						double nMHashps = ((double)nHashes / 1000.0) / (double)TIMER.ElapsedMilliseconds();
+						time_t currentTime;
+						time(&currentTime);
+						nBlocksFoundCounter++;
+						if (bBenchmark)
+						{
+							printf("\n[MASTER] TEST Block Found by \"%s\"		%.1f MHash/s!!!  | %s\n", device_name[THREADS[nIndex]->GetGpuId()], nMHashps, ctime(&currentTime));							
+							THREADS[nIndex]->SetIsNewBlock(true);
+							THREADS[nIndex]->SetIsBlockFound(false);
+
+							break;
+						}
 						//							
 						/** Attempt to Submit the Block to Network. **/
-						unsigned char RESPONSE = CLIENT->SubmitBlock(THREADS[nIndex]->GetBlock()->GetMerkleRoot(), THREADS[nIndex]->GetBlock()->GetNonce(), 10);
-						double  Elapsed = (double)TIMER.ElapsedMilliseconds();
-						double  nHashes = THREADS[nIndex]->GetHashes();
-						double khash = nHashes / Elapsed;
-						Hashes();
-						TIMER.Reset();
+						unsigned char RESPONSE = CLIENT->SubmitBlock(THREADS[nIndex]->GetBlock()->GetMerkleRoot(), THREADS[nIndex]->GetBlock()->GetNonce(), nTimeout);
+						//Hashes();
+						//TIMER.Reset();
 						if (RESPONSE == 200)
-							printf("[MASTER] Block Found by %s on thread %d                   %.1f kHash/s (accepted) Yay !!!\n", device_name[nIndex], nIndex, khash);
+						{
+							printf("\n[MASTER] Block Found by \"%s\"		%.1f MHash/s (accepted) Yay !!!  | %s\n", device_name[THREADS[nIndex]->GetGpuId()], nMHashps, ctime(&currentTime));
+							nBlocksAccepted++;
+							THREADS[nIndex]->SetIsNewBlock(true);
+							THREADS[nIndex]->SetIsBlockFound(false);
+						}
 						else if (RESPONSE == 201)
 						{
-
-							printf("[MASTER] Block Found by %s on thread %d                  %.1f kHash/s (rejected) Booo !!!\n", device_name[nIndex], nIndex, khash);
+							nBlocksRejected++;
+							printf("\n[MASTER] Block Found by \"%s\"		%.1f MHash/s (rejected) Booo !!!  | %s\n", device_name[THREADS[nIndex]->GetGpuId()],  nMHashps, ctime(&currentTime));
 							THREADS[nIndex]->SetIsNewBlock(true);
 							THREADS[nIndex]->SetIsBlockFound(false);
 						}
 						else
 						{
-							printf("[MASTER] Failure to Submit Block. Reconnecting...\n");
+							nBlocksRejected++;
+							printf("[MASTER] Failure to Submit Block. Reconnecting... %s", ctime(&currentTime));
 							CLIENT->Disconnect();
 						}
 

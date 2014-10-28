@@ -16,8 +16,6 @@ namespace LLP
 	
 }
 
-
-
 namespace Core
 {
 	
@@ -26,16 +24,19 @@ namespace Core
 	{
 	public:
 		LLP::Miner  *CLIENT;
-		int nThreads, nTimeout;
+		int nThreads, nTimeout, nThroughput;
 		std::vector<MinerThread*> THREADS;
 		LLP::Thread_t THREAD;
 		LLP::Timer    TIMER;
+		LLP::Timer	StartTimer;
 		std::string   IP, PORT;
-		ServerConnection(std::string ip, std::string port, int nMaxThreads, int nMaxTimeout);
+		bool bBenchmark = false;
+
+		ServerConnection(std::string ip, std::string port, int nMaxThreads, int nMaxTimeout, int throughput = 0, bool benchmark = false);
 		void ResetThreads();
 		unsigned long long Hashes();
 		void ServerThread();
-
+		
 
 	};
 }

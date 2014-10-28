@@ -341,18 +341,17 @@ void sk1024_keccak_cpu_init(int thr_id, int threads)
 } 
 
 
-__host__ uint64_t sk1024_keccak_cpu_hash(int thr_id, int threads, uint64_t startNounce, uint64_t *d_nonceVector, uint64_t *d_hash, int order)
+__host__ uint64_t sk1024_keccak_cpu_hash(int thr_id, int threads, uint64_t startNounce, uint64_t *d_nonceVector, uint64_t *d_hash, int order, int threadsperblock)
 {
 	uint64_t result = 0xffffffffffffffff;
 	cudaMemset(d_SKNonce[thr_id], 0xff, sizeof(uint64_t));
-	int threadsperblock = 128;
 
 	dim3 grid((threads + threadsperblock - 1) / threadsperblock);
 	dim3 block(threadsperblock);
 
 	size_t shared_size = 0;
 
-		sk1024_keccak_gpu_hash << <grid, block, shared_size >> >(threads, startNounce, d_hash, d_nonceVector, d_SKNonce[thr_id]);
+	sk1024_keccak_gpu_hash << <grid, block, shared_size >> >(threads, startNounce, d_hash, d_nonceVector, d_SKNonce[thr_id]);
 	cudaMemcpy(d_sknounce[thr_id], d_SKNonce[thr_id], sizeof(uint64_t), cudaMemcpyDeviceToHost);
 	//	cudaThreadSynchronize();
 	MyStreamSynchronize(NULL, order, thr_id);
