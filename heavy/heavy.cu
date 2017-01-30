@@ -174,6 +174,19 @@ extern "C" void cuda_devicenames()
     }
 }
 
+void cuda_deviceproperties(int GPU_N)
+{
+	for (int i = 0; i < GPU_N; i++)
+	{
+		cudaDeviceProp props;
+		cudaGetDeviceProperties(&props, device_map[i]);
+
+		device_name[i] = strdup(props.name);
+		device_major[i] = props.major;
+		device_minor[i] = props.minor;
+	}
+}
+
 static bool substringsearch(const char *haystack, const char *needle, int &match)
 {
     int hlen = strlen(haystack);

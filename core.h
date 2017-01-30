@@ -36,8 +36,7 @@ namespace Core
 		void ResetThreads();
 		unsigned long long Hashes();
 		void ServerThread();
-		
-
+		static double GetDifficulty(unsigned int nBits, int nChannel);
 	};
 }
 

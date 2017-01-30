@@ -154,3 +154,11 @@ $RECYCLE.BIN/
 
 # Mac desktop service store files
 .DS_Store
+/hash/MinerThread.cpp.bak
+/hash/Miner.h.bak
+/hash/Miner.cpp.bak
+/cpu-miner.cpp.bak
+/ccminer.vcxproj.bak
+/miner2.h.bak
+/core.cpp.bak
+*.bak

@@ -50,13 +50,33 @@ namespace LLP
 
 		Packet RESPONSE = ReadNextPacket(nTimeout);
 			
-		if(RESPONSE.IsNull())
+		if(RESPONSE.IsNull() || RESPONSE.GetLength() == 0)
 			return NULL;
 		Core::CBlock* BLOCK = DeserializeBlock(RESPONSE.GetData());
 		ResetPacket();
 			
 		return BLOCK;
 	}
+
+
+	bool Miner::GetBlock(Core::CBlock* BLOCK, int nTimeout)
+	{
+		Packet* packet = new Packet();
+		packet->SetHeader(GET_BLOCK);
+		this->WritePacket(packet);
+		delete(packet);
+		
+		Packet RESPONSE = ReadNextPacket(nTimeout);
+
+		if (RESPONSE.IsNull() || RESPONSE.GetLength() == 0)
+			return false;
+		bool dbRes = DeserializeBlock(RESPONSE.GetData(), BLOCK);
+		ResetPacket();
+
+		return dbRes;
+	}
+
+
 
 	unsigned int Miner::GetHeight(int nTimeout)
 	{
@@ -105,9 +125,32 @@ namespace LLP
 		return RESPONSE.GetHeader();
 	}
 
+	bool Miner::DeserializeBlock(std::vector<unsigned char> DATA, Core::CBlock* BLOCK)
+	{
+		if (DATA.size() == 0)
+			return false;
+		BLOCK->SetVersion(bytes2uint(std::vector<unsigned char>(DATA.begin(), DATA.begin() + 4)));
+
+		uint1024 prevBlock = BLOCK->GetPrevBlock();
+		prevBlock.SetBytes(std::vector<unsigned char>(DATA.begin() + 4, DATA.begin() + 132));
+		BLOCK->SetPrevBlock(prevBlock);
+
+		uint512 merkleRoot = BLOCK->GetMerkleRoot();
+		merkleRoot.SetBytes(std::vector<unsigned char>(DATA.begin() + 132, DATA.end() - 20));
+		BLOCK->SetMerkleRoot(merkleRoot);
+
+		BLOCK->SetChannel(bytes2uint(std::vector<unsigned char>(DATA.end() - 20, DATA.end() - 16)));
+		BLOCK->SetHeight(bytes2uint(std::vector<unsigned char>(DATA.end() - 16, DATA.end() - 12)));
+		BLOCK->SetBits(bytes2uint(std::vector<unsigned char>(DATA.end() - 12, DATA.end() - 8)));
+		BLOCK->SetNonce(bytes2uint64(std::vector<unsigned char>(DATA.end() - 8, DATA.end())));
+
+		return true;
+	}
 
 	Core::CBlock* Miner::DeserializeBlock(std::vector<unsigned char> DATA)
 	{
+		if (DATA.size() == 0)
+			return nullptr;
 		Core::CBlock* BLOCK = new Core::CBlock();
 		BLOCK->SetVersion(bytes2uint(std::vector<unsigned char>(DATA.begin(), DATA.begin() + 4)));
 			

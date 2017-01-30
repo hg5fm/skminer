@@ -51,6 +51,7 @@ namespace Core
 
 	void MinerThread::SK1024Miner()
 	{
+		SetThreadPriority(GetCurrentThread(), 2);
 		const int throughput = GetThroughput() == 0 ? 512 * 1 * 512 * 8 : GetThroughput();
 		loop
 		{
@@ -83,9 +84,9 @@ namespace Core
 					m_clLock.lock();
 					{
 						Nonce = m_pBLOCK->GetNonce();
-						m_GpuId = 0;
-						found = scanhash_sk1024(m_GpuId, TheData, TheTarget, Nonce, 0xffffff, &hashes, throughput);
-						if (hashes < 0xffffffffffffffff)
+						//m_GpuId = 0;
+						found = scanhash_sk1024(m_GpuId, TheData, TheTarget, Nonce, 512 * 8 * 512 * 40, &hashes, throughput, 128, 128);
+						if (hashes < 0xffffffffffff)
 							SetHashes(GetHashes()+hashes);
 
 					}
@@ -103,12 +104,12 @@ namespace Core
                         break;
 					}
  //                   printf("hashes %d m_unHashes %d gethashes %d\n",hashes,m_unHashes,GetHashes());
-					m_clLock.lock();
+					/*m_clLock.lock();
 					{
 						m_pBLOCK->SetNonce(m_pBLOCK->GetNonce()+hashes); 
 					}
 					m_clLock.unlock();
-
+*/
 
 					if(Nonce >= MAX_THREADS) //max_thread==> max_nonce
 					{

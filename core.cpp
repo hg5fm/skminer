@@ -65,6 +65,39 @@ namespace Core
 	}
 
 
+	double ServerConnection::GetDifficulty(unsigned int nBits, int nChannel)
+	{
+		/** Prime Channel is just Decimal Held in Integer
+		Multiplied and Divided by Significant Digits. **/
+		if (nChannel == 1)
+			return nBits / 10000000.0;
+
+		/** Get the Proportion of the Bits First. **/
+		auto dDiff =
+			static_cast<double>(0x0000ffff) / static_cast<double>(nBits & 0x00ffffff);
+
+		/** Calculate where on Compact Scale Difficulty is. **/
+		int nShift = nBits >> 24;
+
+		/** Shift down if Position on Compact Scale is above 124. **/
+		while (nShift > 124)
+		{
+			dDiff = dDiff / 256.0;
+			nShift--;
+		}
+
+		/** Shift up if Position on Compact Scale is below 124. **/
+		while (nShift < 124)
+		{
+			dDiff = dDiff * 256.0;
+			nShift++;
+		}
+
+		/** Offset the number by 64 to give larger starting reference. **/
+		return dDiff * ((nChannel == 2) ? 64 : 1024 * 1024 * 256);
+	}
+
+
 
 	/** Main Connection Thread. Handles all the networking to allow
 	Mining threads the most performance. **/
@@ -105,7 +138,11 @@ namespace Core
 				if (!CLIENT->Connected() || CLIENT->Errors())
 				{
 					ResetThreads();
-
+					if (CLIENT != nullptr)
+					{
+						delete CLIENT;
+						CLIENT = new LLP::Miner(IP, PORT);
+					}
 					if (!CLIENT->Connect())
 						continue;
 					else
@@ -138,26 +175,24 @@ namespace Core
 					double  Elapsed = (double)TIMER.ElapsedMilliseconds();
 					unsigned long long nHashes = Hashes();
 					double nMHashps = ((double) nHashes/1000.0) / (double)TIMER.ElapsedMilliseconds();
-
+					if (THREADS[0]->GetBlock() == NULL)
+						continue;
 					unsigned int nBits = THREADS[0]->GetBlock()->GetBits();
-					CBigNum target;
 
-					target.SetCompact(nBits);
-					//CBigNum one;
-					//one.SetCompact(0x7e7fffff);  // the difficulty of block 0
-					CBigNum diff = diff1 / target;
+					double diff = GetDifficulty(nBits, 2);
 															
 					struct tm t;
 					__time32_t aclock = elapsedFromStart;
 					
 					_gmtime32_s(&t, &aclock);
 					
-					printf("[METERS] %.04f MHash/s | Block/h %.04f | Blks ACC=%u REJ=%u | Diff=%.08f |  %02d:%02d:%02d:%02d\n", 
-						nMHashps, (double)nBlocksFoundCounter / (double)elapsedFromStart *3600.0, nBlocksAccepted, nBlocksRejected, (double)diff.getulong() / 100000000.0, t.tm_yday, t.tm_hour, t.tm_min, t.tm_sec);
+					printf("[METERS] %.04f MHash/s | Block/24h %.04f | Blks ACC=%u REJ=%u | Diff=%.08f |  %02d:%02d:%02d:%02d\n", 
+						nMHashps, (double)nBlocksFoundCounter / (double)elapsedFromStart * 86400.0, nBlocksAccepted, nBlocksRejected, diff, t.tm_yday, t.tm_hour, t.tm_min, t.tm_sec);
 
 					//printf("[METERS] %.04f MHash/s  |  %.04f Block/h  |  Blks ACC=%u REJ=%u | Diff= %.08f / %lu  \n", 
 					//	nMHashps, (double)nBlocksFoundCounter / (double)elapsedFromStart *3600.0, nBlocksAccepted, nBlocksRejected, 1.0 / (double)nDifficulty, diff.getulong());
-
+					if (nMHashps > 5000)
+						exit(1);
 					TIMER.Reset();
 					if (nTimerWait == 2)
 						nTimerWait = 10;
@@ -175,14 +210,19 @@ namespace Core
 						/** Retrieve new block from Server. **/
 						/** Delete the Block Pointer if it Exists. **/
 						CBlock* pBlock = THREADS[nIndex]->GetBlock();
-						if (pBlock != NULL)
+						if (pBlock == NULL)
 						{
-							delete(pBlock);
+							pBlock = new CBlock();
 						}
 
 						/** Retrieve new block from Server. **/
-						pBlock = CLIENT->GetBlock(5);
-
+						bool getBRes = CLIENT->GetBlock(pBlock, nTimeout);
+						if (pBlock == nullptr || getBRes == false)
+						{
+							CLIENT->Disconnect();
+							printf("[MASTER] Failed to get new Block. Reconnecting \r\n");
+							break;
+						}
 
 						/** If the block is good, tell the Mining Thread its okay to Mine. **/
 						if (pBlock)
@@ -254,9 +294,9 @@ namespace Core
 				}
 			}
 
-			catch (std::exception& e)
+			catch (...)
 			{
-				printf("%s\n", e.what());
+				printf("Some Unexpected Exception occured");
 			}
 		}
 

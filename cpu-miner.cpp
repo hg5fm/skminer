@@ -58,6 +58,7 @@ extern "C"
 int cuda_num_devices();
 void cuda_devicenames();
 int cuda_finddevice(char *name);
+void cuda_deviceproperties(int GPU_N);
 #ifdef __cplusplus
 }
 #endif

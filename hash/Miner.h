@@ -11,6 +11,7 @@ namespace LLP
 	private:
 
 		Core::CBlock* DeserializeBlock(std::vector<unsigned char> DATA);
+		bool DeserializeBlock(std::vector<unsigned char> DATA, Core::CBlock* BLOCK);
 		std::vector<unsigned char> uint2bytes(unsigned int UINT);
 		std::vector<unsigned char> uint2bytes64(unsigned long long UINT);
 		unsigned int bytes2uint(std::vector<unsigned char> BYTES, int nOffset = 0) {
@@ -54,6 +55,8 @@ namespace LLP
 		void SetChannel(unsigned int nChannel);
 		
 		Core::CBlock* GetBlock(int nTimeout = 30);
+		bool GetBlock(Core::CBlock* block, int nTimeout = 30);
+
 		unsigned int GetHeight(int nTimeout = 30);
 		unsigned char SubmitBlock(uint512 hashMerkleRoot, unsigned long long nNonce, int nTimeout = 30);
 	};

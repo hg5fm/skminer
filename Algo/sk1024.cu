@@ -25,7 +25,7 @@ extern void sk1024_set_Target(const void *ptarget);
 
 extern bool opt_benchmark;
 
-extern bool scanhash_sk1024(unsigned int thr_id, uint32_t* TheData, uint1024 TheTarget, uint64_t &TheNonce, uint64_t max_nonce, unsigned long long *hashes_done, int throughput)
+extern bool scanhash_sk1024(unsigned int thr_id, uint32_t* TheData, uint1024 TheTarget, uint64_t &TheNonce, uint64_t max_nonce, unsigned long long *hashes_done, int throughput, int thbpSkein, int thpbKeccak)
 {
 	uint64_t *ptarget = (uint64_t*)&TheTarget;
 
@@ -43,9 +43,7 @@ extern bool scanhash_sk1024(unsigned int thr_id, uint32_t* TheData, uint1024 The
 		cudaSetDevice(device_map[thr_id]);
 
 		// Konstanten kopieren, Speicher belegen
-		cudaMalloc(&d_hash[thr_id], 1 * 16 * sizeof(uint64_t) * throughput);
-		//if (cudaMalloc(&d_hash[thr_id], 1 * 16 * sizeof(uint64_t) * throughput) != cudaSuccess)
-		//	return false;
+		cudaMalloc(&d_hash[thr_id], 2 * 16 * sizeof(uint64_t) * throughput);
 		skein1024_cpu_init(thr_id, throughput);
 		sk1024_keccak_cpu_init(thr_id, throughput);
 		init[thr_id] = true;
@@ -58,34 +56,38 @@ extern bool scanhash_sk1024(unsigned int thr_id, uint32_t* TheData, uint1024 The
 	//	do {
 
 	int order = 0;
-	skein1024_cpu_hash(thr_id, throughput, ((uint64_t*)TheData)[26], d_hash[thr_id], order++, 128);
-	uint64_t foundNonce = sk1024_keccak_cpu_hash(thr_id, throughput, ((uint64_t*)TheData)[26], NULL, d_hash[thr_id], order++, 64);
+	skein1024_cpu_hash(thr_id, throughput, ((uint64_t*)TheData)[26], d_hash[thr_id], order++, thbpSkein);
+	uint64_t foundNonce = sk1024_keccak_cpu_hash(thr_id, throughput, ((uint64_t*)TheData)[26], NULL, d_hash[thr_id], order++, thpbKeccak);
 	if (foundNonce != 0xffffffffffffffff)
 	{
 
 
 		((uint64_t*)TheData)[26] = foundNonce;
-		/*
+//			for (int i = 0; i<27; i++) { printf("cpu data result i%d  %08x %08x\n",i, ((uint32_t*)TheData)[2 * i], ((uint32_t*)TheData)[2 * i + 1]); }
 		uint1024 skein;
 		Skein1024_Ctxt_t ctx;
 		Skein1024_Init(&ctx, 1024);
 		Skein1024_Update(&ctx, (unsigned char *)TheData, 216);
 		Skein1024_Final(&ctx, (unsigned char *)&skein);
 
+			uint64_t *pskein = (uint64_t*)&skein;
+//			for (int i = 0; i<16; i++) { printf("skein result i%d  %08x %08x\n",i, ((uint32_t*)pskein)[2 * i], ((uint32_t*)pskein)[2 * i +1]); }
 		uint64_t keccak[16];
 		Keccak_HashInstance ctx_keccak;
 		Keccak_HashInitialize(&ctx_keccak, 576, 1024, 1024, 0x05);
 		Keccak_HashUpdate(&ctx_keccak, (unsigned char *)&skein, 1024);
 		Keccak_HashFinal(&ctx_keccak, (unsigned char *)&keccak);
-		*/
-		//			if (keccak[15] <= Htarg) {
+			uint64_t *pkeccak = (uint64_t*)&keccak;
+//			for (int i = 0; i<16; i++) { printf("skein result i%d  %08x %08x\n", i, ((uint32_t*)pkeccak)[2 * i], ((uint32_t*)pkeccak)[2 * i + 1]); }
+
+			if (keccak[15] <= Htarg) {
 		TheNonce = foundNonce; //return the nonce
 		*hashes_done = foundNonce - first_nonce + 1;
 		return true;
-		//			}
-		//			else {
-		//				printf("GPU #%d: result for nonce $%08X does not validate on CPU! \n", thr_id, foundNonce);
-		//			}
+			}
+			else {
+				printf("GPU #%d: result for nonce $%08X does not validate on CPU! \n", thr_id, foundNonce);
+			}
 	}
 	((uint64_t*)TheData)[26] += throughput;
 
